@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+{% load static %}
+<html>
+    <head>
+        <title>mpdevice</title>
+        <!-- 
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css" integrity="sha512-aOG0c6nPNzGk+5zjwyJaoRUgCdOrfSDhmMID2u4+OIslr0GjpLKo7Xm0Ao3xmpM4T8AmIouRkqwj1nrdVsLKEQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        <style>
+            body {
+               background-color: lightgray;
+            }
+            em {
+                color: darkgray;
+            }
+            #ct{
+                position: relative;
+                left: 5%;
+                top: 0%;
+                // transform: translate(-25%, 0%);
+                height: 100%; 
+                overflow: auto;
+            }
+            .c{
+                height: 100%;
+                overflow: hidden;
+            }
+
+            .cam_container{
+                width: 100%;
+                height:100%;
+                // background: green;
+            }
+
+            #cam_source{
+                display: inline-block;
+                vertical-align: top;
+            }
+            #model_settings{
+                display: inline-block;
+                vertical-align: top;
+                margin-left: 30px;
+                width: calc(100% - 1100px);
+                height:540px;
+                // background:red;
+            }
+
+            h1 {
+
+                color: black;
+            }
+            #canvas{border:1px solid black;}
+            #infoi {
+                width: 100%;
+                height: 100%;
+                position: fixed;
+                top: 0;
+                left: 0;
+                z-index: 10;
+              }
+            #btn{
+                margin-bottom: 50px;
+            }
+
+            select:active, select:hover {
+                outline: none
+            }
+
+            select:active, select:hover {
+                outline-color: red
+            }
+
+            .slidecontainer {
+                width: 100%;
+            }
+
+            .slider {
+                -webkit-appearance: none;
+                width: 100%;
+                height: 15px;
+                border-radius: 5px;
+                background: #a8a8a8;
+                outline: none;
+                opacity: 0.7;
+                -webkit-transition: .2s;
+                transition: opacity .2s;
+            }
+
+            .slider:hover {
+                opacity: 1;
+            }
+
+            .slider::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 25px;
+                height: 25px;
+                border-radius: 50%;
+                background: #046daa;
+                cursor: pointer;
+            }
+
+            .slider::-moz-range-thumb {
+                width: 25px;
+                height: 25px;
+                border-radius: 50%;
+                background: #046daa;
+                cursor: pointer;
+            }
+
+        </style>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js" integrity="sha512-uto9mlQzrs59VwILcLiRYeLKPPbS/bT71da/OEBYEwcdNUk8jYIy+D176RYoop1Da+f9mvkYrmj5MCLZWEtQuA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script type="text/javascript">
+            $(function(){
+                $("#infoi").hide(0);
+                console.log({{device_id}});
+            });
+            
+            {% if device_id > -1%}
+                window.onload=function (){
+                    var msg="mp device id is {{device_id}}";
+                    alert(msg);
+                    window.location.replace("{% url "main_page" %}")
+                }
+            {% endif %}
+            
+            $(document).ready(function() {
+                $('#rtsp_id').on('change', function() {
+                    if($("#rtsp_id").val() == "add rtsp url"){
+                        $("#infoi").show(0);
+                    } else {
+                        document.forms['device_form'].submit();
+                    }
+                });
+              });
+
+            function close_infoi() {
+                $("#infoi").hide(0);
+            }
+
+            $( function() {
+                $( document ).tooltip();
+                } );
+            
+            $(document).ready(function(){
+                    var hand =$("input[id='model1']").is(":checked");
+                    var face =$("input[id='model3']").is(":checked");
+                    var slider = document.getElementById("myRange");
+                    $("#complexity_slider").show(100);
+
+                    if(hand){
+                        slider.max = 1;
+                    } else if (face){
+                        $("#complexity_slider").hide(100);
+                    }else {
+                        slider.max = 2;
+                    }
+                });
+
+            function model_select(src) {
+                $("#complexity_slider").show(100);
+                var slider = document.getElementById("myRange");
+                var output = document.getElementById("demo");
+                output.innerHTML = 0;
+
+                if(src.value == "Hands"){
+                    slider.max = 1;
+                    slider.value = 0;
+                    
+                } else if (src.value == "Face"){
+                    $("#complexity_slider").hide(100);
+                } else if (src.value == "Pose") {
+                    slider.max = 2;
+                    slider.value = 0;
+                } else if (src.value == "Holistic"){
+                    slider.max = 2;
+                    slider.value = 0;
+                }
+            }
+            
+        </script>
+    </head>
+    <body>
+        <div id="infoi">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content rounded-5 shadow">
+                    <div class="modal-header p-5 pb-4 border-bottom-0">
+                        <h2 class="fw-bold mb-0">Add new RTSP</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="close_infoi()"></button>
+                    </div>
+
+                    <div class="modal-body p-5 pt-0">
+                        <form class="" method="POST" action="{% url "main_page" %}">
+                            {% csrf_token %}
+                            <div class="form-floating mb-3">
+                                <input name="new_rtsp_name" type="text" class="form-control rounded-4" id="floatingInput" placeholder="RTSP name">
+                                <label for="floatingInput">RTSP name</label>
+                            </div>
+                            <div class="form-floating mb-3">
+                                <input name="new_rtsp_url" type="text" class="form-control rounded-4" id="floatingPassword" placeholder="RTSP url">
+                                <label for="floatingInput">RTSP streaming</label>
+                            </div>
+                            <button name="btnAddNew" class="w-100 mb-2 btn btn-lg rounded-4 btn-primary" type="submit">Save</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="c">
+            <div id="ct" >
+                <h1 style="font-weight:bold;">Extra Setup</h1>
+                <form name="device_form" action="" method="POST">
+                    {% csrf_token %}
+                    <div style="display:inline;">
+                        <div style="float:left;  width: 50px;"><label class="">rtsp : </label></div>
+                        <div style="float:left">
+                            <select id="rtsp_id" name="rtsp_name">
+                                    {% if cam_source == '--select--' %} 
+                                        <option value='{{ cam_source_value }}' selected disabled hidden>{{ cam_source }}</option>
+                                    {% endif %}
+                                {% for i in rtsp %}
+                                    <option value='{{i.name}}' {% if i.name == cam_source %} selected {% endif %}>{{ i.name }}</option>
+                                {% endfor %}
+                                    <option value='add rtsp url'>add rtsp url</option>
+                            </select>
+                        </div>
+                    </div>
+                    <br>
+                    <br>
+                    <div class="cam_container">
+                    <img id="cam_source" src="{{ frame_url }}">
+                    <div id="model_settings">
+                        <h3> Model Configuration</h3>
+                        <br>
+                            <label class="checkbox-inline">
+                                <input type="radio" name="mediapipe_model" id="model1" value="Hands" onclick="model_select(this)"
+                                {% if mediapipe_model == 'Hands' %}
+                                checked
+                                {% endif %}
+                                > Hands
+                            </label>
+                            <label class="checkbox-inline">
+                                <input type="radio" name="mediapipe_model" id="model2" value="Pose" onclick="model_select(this)"
+                                {% if mediapipe_model == 'Pose' %}
+                                checked
+                                {% endif %}
+                                > Pose
+                            </label>
+                            <label class="checkbox-inline">
+                                <input type="radio" name="mediapipe_model" id="model3" value="Face" onclick="model_select(this)"
+                                {% if mediapipe_model == 'Face' %}
+                                checked
+                                {% endif %}
+                                > Face
+                            </label>
+                            <label class="checkbox-inline">
+                                <input type="radio" name="mediapipe_model" id="model4" value="Holistic" onclick="model_select(this)"
+                                {% if mediapipe_model == 'Holistic' %}
+                                checked
+                                {% endif %}
+                                > Holistic
+                            </label>
+                        <br>
+                        <br>
+                        
+                        <div class="slidecontainer" id="complexity_slider">
+                            <label for="customRange3" class="form-label" style="display: inline-block;">model complexity </label>
+                            <span class="glyphicon glyphicon-question-sign" title="Landmark accuracy as well as inference latency generally go up with the model complexity"></span>
+                            <p style="display: inline-block; font-weight:bold;"> : <span id="demo" ></span></p>
+                            <input type="range" min="0" max="1" value="{{ complexity }}" class="slider" name="complexity" id="myRange">
+                          </div>
+                          
+                          <script>
+                          var slider = document.getElementById("myRange");
+                          var output = document.getElementById("demo");
+                          output.innerHTML = slider.value;
+                          
+                          slider.oninput = function() {
+                            output.innerHTML = this.value;
+                          }
+                          </script>
+                        <br>
+                        
+                        <div class="slidecontainer">
+                            <label for="customRange3" class="form-label" style="display: inline-block;">minimum detection confidence </label>
+                            <span class="glyphicon glyphicon-question-sign" title="Minimum confidence value from the hand detection model for the detection to be considered successful"></span>
+                            <p style="display: inline-block; font-weight:bold;">  : <span id="confidence"></span></p>
+                            <input type="range" min="0" max="100" value="{{ confidence }}" class="slider" name="confidence" id="confidence_range">
+                        </div>
+                          
+                          <script>
+                          var confidence_slider = document.getElementById("confidence_range");
+                          var confidence_output = document.getElementById("confidence");
+                          confidence_output.innerHTML = (confidence_slider.value/100).toFixed(2);
+                          
+                          confidence_slider.oninput = function() {
+                            confidence_output.innerHTML = (this.value/100).toFixed(2);
+                          }
+                          </script>
+                        <br>
+                        <br>
+                        <input type="submit" name="btnApply" id="btn" value="Apply">
+                        <!--
+                        <a href="http://jqueryui.com/themeroller/" title="ThemeRoller: jQuery UI&apos;s theme builder application">ThemeRoller</a>
+                        <p>Envelope icon: <span class="glyphicon glyphicon-envelope"></span></p>
+                        -->
+                    </div>
+                    </div>
+                    <br>
+                    <input type="submit" name="btnSave" id="btn" value="Save">
+                    <a href="{% url "clear_setup" %}">
+                    <input type="button" name="btnClear" id="btn" value="Clear">
+                    </a>
+                </form>
+            </div>
+        </div>
+    </body>
+</html>

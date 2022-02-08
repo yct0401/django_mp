@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+{% load static %}
+<html>
+    <head>
+        <title>mpdevice</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        <style>
+            body {
+               background-color: lightgray;
+            }
+            em {
+                color: darkgray;
+            }
+            #ct{
+                position: relative;
+                left: 5%;
+                top: 0%;
+                // transform: translate(-25%, 0%);
+                height: 100%; 
+                overflow: auto;
+            }
+            .c{
+                height: 100%;
+                overflow: hidden;
+            }
+            h1 {
+
+                color: black;
+            }
+            #canvas{border:1px solid black;}
+            #infoi {
+                width: 100%;
+                height: 100%;
+                position: fixed;
+                top: 0;
+                left: 0;
+                z-index: 10;
+              }
+            #btn{
+                margin-bottom: 50px;
+            }
+
+            select:active, select:hover {
+                outline: none
+            }
+
+            select:active, select:hover {
+                outline-color: red
+            }
+        </style>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+        <script type="text/javascript">
+            $(function(){
+                $("#infoi").hide(0);
+                console.log({{device_id}});
+            });
+            
+            {% if device_id > -1%}
+                window.onload=function (){
+                    var msg="mdp device id is {{device_id}}";
+                    alert(msg);
+                    window.location.replace("{% url "main_page" %}")
+                }
+            {% endif %}
+            
+            $(document).ready(function() {
+                $('#rtsp_id').on('change', function() {
+                    if($("#rtsp_id").val() == "add rtsp url"){
+                        $("#infoi").show(0);
+                    } else {
+                        document.forms['device_form'].submit();
+                    }
+                });
+              });
+
+            function close_infoi() {
+                $("#infoi").hide(0);
+            }
+        </script>
+    </head>
+    <body>
+        <div id="infoi">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content rounded-5 shadow">
+                    <div class="modal-header p-5 pb-4 border-bottom-0">
+                        <h2 class="fw-bold mb-0">Add new RTSP</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="close_infoi()"></button>
+                    </div>
+
+                    <div class="modal-body p-5 pt-0">
+                        <form class="" method="POST" action="{% url "main_page" %}">
+                            {% csrf_token %}
+                            <div class="form-floating mb-3">
+                                <input name="new_rtsp_name" type="text" class="form-control rounded-4" id="floatingInput" placeholder="RTSP name">
+                                <label for="floatingInput">RTSP name</label>
+                            </div>
+                            <div class="form-floating mb-3">
+                                <input name="new_rtsp_url" type="text" class="form-control rounded-4" id="floatingPassword" placeholder="RTSP url">
+                                <label for="floatingInput">RTSP streaming</label>
+                            </div>
+                            <button name="btnAddNew" class="w-100 mb-2 btn btn-lg rounded-4 btn-primary" type="submit">Save</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- <div class="container">
+            <header class="d-flex justify-content-center py-3">
+              <ul class="nav nav-pills">
+                <li class="nav-item"><a href="#" class="nav-link active" aria-current="page">Home</a></li>
+                <li class="nav-item"><a href="#" class="nav-link">Features</a></li>
+                <li class="nav-item"><a href="#" class="nav-link">Pricing</a></li>
+                <li class="nav-item"><a href="#" class="nav-link">FAQs</a></li>
+                <li class="nav-item"><a href="#" class="nav-link">About</a></li>
+              </ul>
+            </header>
+        </div> -->
+        <div class="c">
+            <div id="ct" >
+                <h1 style="font-weight:bold;">Extra Setup</h1>
+                <form name="device_form" action="" method="POST">
+                    {% csrf_token %}
+                    <div style="display:inline;">
+                        <div style="float:left;  width: 50px;"><label class="">rtsp : </label></div>
+                        <div style="float:left">
+                            <select id="rtsp_id" name="rtsp_name">
+                                    <option value='{{ cam_source_value }}'>{{ cam_source }}</option>
+                                {% for i in rtsp %}
+                                    <option value='{{i.name}}'>{{ i.name }}</option>
+                                {% endfor %}
+                                    <option value='add rtsp url'>add rtsp url</option>
+                            </select>
+                        </div>
+                    </div>
+                    <br>
+                    <br>
+                    <img src="{{ frame_url }}">
+                    <br>
+                    <br>
+                    <input type="submit" name="btnSave" id="btn" value="Save">
+                    <a href="{% url "clear_setup" %}">
+                    <input type="button" name="btnClear" id="btn" value="Clear">
+                    </a>
+                </form>
+            </div>
+        </div>
+    </body>
+</html>
