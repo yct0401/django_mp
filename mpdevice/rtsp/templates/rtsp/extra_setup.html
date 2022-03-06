@@ -43,10 +43,18 @@
                 display: inline-block;
                 vertical-align: top;
                 margin-left: 30px;
-                width: calc(100% - 1100px);
+                margin-top: 50px;
+                width: 80%;
                 height:540px;
                 // background:red;
             }
+            
+            @media screen and (min-width:1200px) { 
+                #model_settings{
+                    margin-top: 0px;
+                    width: calc(100% - 1100px);
+                }
+              }
 
             h1 {
 
@@ -195,7 +203,7 @@
                     </div>
 
                     <div class="modal-body p-5 pt-0">
-                        <form class="" method="POST" action="{% url "main_page" %}">
+                        <form class="" method="POST" action="{% url "add_new_rtsp" %}">
                             {% csrf_token %}
                             <div class="form-floating mb-3">
                                 <input name="new_rtsp_name" type="text" class="form-control rounded-4" id="floatingInput" placeholder="RTSP name">

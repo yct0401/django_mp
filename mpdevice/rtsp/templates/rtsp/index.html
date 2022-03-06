@@ -76,10 +76,19 @@
     </head>
     <body>
         <div class="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark" style="width: 280px; height: 100% ">
-            <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
-              <svg class="bi me-2" width="40" height="32"><use xlink:href="#bootstrap"></use></svg>
-              <span class="fs-4">Device</span>
-            </a>
+
+            <div>
+                <div class="p-2 bg-primary" style="width:45%; text-align:center; display:inline-block">
+                    <a href="{% url "main_page" %}" class="text-white" style="text-decoration:none;">
+                        Device
+                    </a>
+                </div>
+                <div class="p-2 bg-dark" style="width:45%; text-align:center; display:inline-block">
+                    <a href="{% url "annotation" %}" class="text-white" style="text-decoration:none;">
+                        Label
+                    </a>
+                </div>
+            </div>
             <hr>
             <ul class="nav nav-pills flex-column mb-auto">
             <!-- <a href="#" class="nav-link active" aria-current="page"> 
@@ -107,12 +116,46 @@
             <div class ="record_button">
                 Record
                     <label class="switch">
-                        <input type="checkbox" value = "record" onchange="document.getElementById('switch_form').submit()">
+                        <input type="checkbox" id="btnRecord" value="1" data-url="{% url "main_page" select %}" onchange="record_onchange(this)">
                         <span class="slider round"></span>
                     </label>
+                <script>
+                    var record = -1;
+
+                    window.addEventListener('load', (event) => {
+                       record = -1;
+                       document.getElementById("btnRecord").checked = false;
+                       $.ajax({
+                            type: "GET",
+                            url: $("#btnRecord").attr('data-url'),
+                            data: {'btnRecord': record},
+                            success: function(data){
+                                console.log("success");
+                            },
+                            failure: function(data){
+                                console.log("failure");
+                            },
+                        });
+                    });
+
+                    function record_onchange(item){
+                        record = -record;
+                        $.ajax({
+                          type: "GET",
+                          url: $(item).attr('data-url'),
+                          data: {'btnRecord': record},
+                          success: function(data){
+                              console.log("success");
+                          },
+                          failure: function(data){
+                              console.log("failure");
+                          },
+                      });
+                  }
+                </script>
             </div>
             <div class ="device_img">
-                    <img src="{% url "device_stream" select model complexity confidence %}">
+                    <img src="{% url "device_stream" select %}">
             </div>
             <div class ="device_close">
                 <form name="device_close" action="{% url "close_device" %}" method="POST">

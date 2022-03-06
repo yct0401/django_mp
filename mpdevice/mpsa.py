@@ -1,13 +1,23 @@
+from __future__ import annotations
+from ast import Global
 import json
+from turtle import left
 
 import cv2
 import mediapipe as mp
+import transformations as tf
 
 from iottalkpy.dan import NoData
 from google.protobuf.json_format import MessageToDict
 
-import os, time
-import tempfile
+import os, time, csv, re
+import numpy as np
+from queue import Queue
+import math as m
+
+import itertools
+import tensorflow as tf
+from sklearn.preprocessing import LabelEncoder
 
 class CameraOpenError(Exception):
     pass
@@ -24,7 +34,7 @@ device_name = 'mp'
 ### Or you can use following code to use MAC address for device_addr.
 # from uuid import getnode
 # device_addr = "{:012X}".format(getnode())
-# device_addr = "..."
+# device_addr = "453013fb-5933-4a86-bccc-33efcdce5fc2"
 
 ### [OPTIONAL] If the device_addr is set as a fixed value, user can enable
 ### this option and make the DA register/deregister without rebinding on GUI
@@ -34,7 +44,8 @@ device_name = 'mp'
 # username = 'myname'
 
 ### The Device Model in IoTtalk, please check IoTtalk document.
-device_model = 'MediapipeDevice'
+device_model = 'MPdevice'
+# device_model = 'MPdevice'
 
 ### The input/output device features, please check IoTtalk document.
 idf_list = [ 
@@ -51,19 +62,33 @@ idf_list = [
             'FRightEyeLower-I',
             'FRightEyeUpper-I',
             'FSilhouette-I',
-            # Hand
+            # Hand Coordinate
+            'HLeftIndexCoordinate-I',
+            'HLeftMiddleCoordinate-I',
+            'HLeftPinkyCoordinate-I',
+            'HLeftRingCoordinate-I',
+            'HLeftThumbCoordinate-I',
+            'HLeftWristCoordinate-I',
+            'HRightIndexCoordinate-I',
+            'HRightMiddleCoordinate-I',
+            'HRightPinkyCoordinate-I',
+            'HRightRingCoordinate-I',
+            'HRightThumbCoordinate-I',
+            'HRightWristCoordinate-I',
+            # Hnad Angle
             'HLeftIndex-I',
-            'HLeftMiddle-I',
-            'HLeftPinky-I',
-            'HLeftRing-I',
-            'HLeftThumb-I',
-            'HLeftWrist-I',
-            'HRightIndex-I',
-            'HRightMiddle-I',
-            'HRightPinky-I',
-            'HRightRing-I',
-            'HRightThumb-I',
-            'HRightWrist-I',
+            'HLeftIndexAngle-I',
+            'HLeftMiddleAngle-I',
+            'HLeftPinkyAngle-I',
+            'HLeftRingAngle-I',
+            'HLeftThumbAngle-I',
+            'HLeftWristAngle-I',
+            'HRightIndexAngle-I',
+            'HRightMiddleAngle-I',
+            'HRightPinkyAngle-I',
+            'HRightRingAngle-I',
+            'HRightThumbAngle-I',
+            'HRightWristAngle-I',
             # Pose
             'PHead-I',
             'PLeftLowerLimb-I',
@@ -79,11 +104,11 @@ push_interval = 1  # global interval
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_holistic = mp.solutions.holistic
+mp_hands = mp.solutions.hands
 
 face_visibility = False
 left_hand_visibility = False
 right_hand_visibility = False
-save_imgae = True
 
 face_dict = {}
 left_hand_dict = {}
@@ -120,114 +145,405 @@ silhouette_idx = [   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
                     397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
                     172,  58, 132,  93, 234, 127, 162, 21,  54,  103, 67,  109]
 
-holistic = mp_holistic.Holistic( min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1)
+record_flag = False
+train_flag = True
+image_id = 0
+annotation = None
+keypoint_classifier = None
+gesture = None
+hand_sign_id = [-1, -1]
 
-images = []
-fp = tempfile.NamedTemporaryFile('w+t')
+class KeyPointClassifier(object):
+    def __init__(
+        self,
+        model_path='./keypoint_classifier_new.tflite',
+        num_threads=1,
+    ):
+        self.interpreter = tf.lite.Interpreter(model_path=model_path,
+                                               num_threads=num_threads)
 
-def save_imgae( path="./", name="img", id=0):
-    global images
-    orign_path = os.path.join(path, (name + "_" + str(id) + "_orign.png"))
-    predetion_path = os.path.join(path, (name + "_" + str(id) + "_predetion.png"))
-    print(len(images))
-    if len(images) == 2:
-        cv2.imwrite(orign_path, images[0])
-        cv2.imwrite(predetion_path, images[1])
-        return True
-    return False
+        self.interpreter.allocate_tensors()
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
 
-def Streaming(url, device_name):
-    global right_hand_visibility, face_visibility, left_hand_visibility
-    global face_dict, left_hand_dict, right_hand_dict, pose_dict, images
+    def __call__(
+        self,
+        landmark_list,
+    ):
+        input_details_tensor_index = self.input_details[0]['index']
+        self.interpreter.set_tensor(
+            input_details_tensor_index,
+            np.array([landmark_list], dtype=np.float32))
+        self.interpreter.invoke()
+
+        output_details_tensor_index = self.output_details[0]['index']
+
+        result = self.interpreter.get_tensor(output_details_tensor_index)
+
+        np.set_printoptions(precision=4, suppress=True)
+        result_index = np.argmax(np.squeeze(result))
+        #print(np.squeeze(result))
+        if np.squeeze(result)[result_index] < 0.5:
+            result_index = -1
+        return result_index
+
+def calc_landmark_list(image, landmarks):
+    image_width, image_height = image.shape[1], image.shape[0]
+
+    landmark_point = []
+
+    # Keypoint
+    for _, landmark in enumerate(landmarks.landmark):
+        landmark_x = min(int(landmark.x * image_width), image_width - 1)
+        landmark_y = min(int(landmark.y * image_height), image_height - 1)
+        # landmark_z = landmark.z
+
+        landmark_point.append([landmark_x, landmark_y])
+
+    return landmark_point
+
+
+def pre_process_landmark(landmark_list):
+    temp_landmark_list = []
+
+    # Convert to relative coordinates
+    base_x, base_y = 0, 0
+    for index, landmark_point in enumerate(landmark_list):
+        if index == 0:
+            base_x, base_y = landmark_point.x, landmark_point.y
+
+        temp_landmark_list.append([landmark_point.x - base_x, landmark_point.y - base_y])
+
+    # Convert to a one-dimensional list
+    temp_landmark_list = list(
+        itertools.chain.from_iterable(temp_landmark_list))
+
+    # Normalization
+    max_value = max(list(map(abs, temp_landmark_list)))
+
+    def normalize_(n):
+        return n / max_value
+
+    temp_landmark_list = list(map(normalize_, temp_landmark_list))
+
+    return temp_landmark_list
+
+
+def singleLMtoDegreeUsingLawOfCosines(pa, pb, pc):
+
+    ab_y = float(pb[1])-float(pa[1])
+    ab_x = float(pb[0])-float(pa[0])
+    ab_z = float(pb[2])-float(pa[2])
+    bc_x = float(pc[0])-float(pb[0])
+    bc_y = float(pc[1])-float(pb[1])
+    bc_z = float(pc[2])-float(pb[2])
+    ac_x = float(pc[0])-float(pa[0])
+    ac_y = float(pc[1])-float(pa[1])
+    ac_z = float(pc[2])-float(pa[2])
+    a = m.sqrt(m.pow(ab_x, 2)+m.pow(ab_y, 2)+m.pow(ab_z, 2))    # AB = a
+    b = m.sqrt(m.pow(bc_x, 2)+m.pow(bc_y, 2)+m.pow(bc_z, 2))    # BC = b
+    c = m.sqrt(m.pow(ac_x, 2)+m.pow(ac_y, 2)+m.pow(ac_z, 2))    # AC = c
+    cos = (m.pow(a, 2)+m.pow(b, 2)-m.pow(c, 2))/(2*a*b)         # cos = (a^2 + b^2 - c^2) / 2ab
+    degree = m.degrees(m.acos(cos))                             # degree = arcccos( cos )
+
+    return degree
+
+def LMtoRotation(landmarks_mediapipe):
+
+    lm = landmarks_mediapipe
+
+    pitch_pa = [lm[0]['x'], lm[0]['y'], lm[5]['z']]
+    pitch_pb = [lm[0]['x'], lm[0]['y'], lm[0]['z']]
+    pitch_pc = [lm[5]['x'], lm[5]['y'], lm[5]['z']]
+
+    roll_pa = [         0, lm[0]['y'], lm[0]['z']]
+    roll_pb = [lm[0]['x'], lm[0]['y'], lm[0]['z']]
+    roll_pc = [lm[5]['x'], lm[5]['y'], lm[0]['z']]
+
+    yaw_pa = [ lm[5]['x'], lm[5]['y'], lm[17]['z']]
+    yaw_pb = [lm[17]['x'], lm[5]['y'], lm[17]['z']]
+    yaw_pc = [ lm[5]['x'], lm[5]['y'],  lm[5]['z']]
+
+    pitch = singleLMtoDegreeUsingLawOfCosines(pitch_pa, pitch_pb, pitch_pc)
+    pitch = 90 - pitch
+    if lm[8]['z'] < lm[0]['z']:
+        pitch = -pitch
+
+    yaw = singleLMtoDegreeUsingLawOfCosines(yaw_pa, yaw_pb, yaw_pc)
+    if lm[5]['z'] > lm[17]['z']:
+        yaw = -yaw
+
+    roll = singleLMtoDegreeUsingLawOfCosines(roll_pa, roll_pb, roll_pc)
+
+    return [pitch, yaw, roll]
+def set_record(cmd, device_name, uuid):
+    global record_flag, image_id, train_flag, keypoint_classifier, gesture
+    print(cmd)
+    if 'unrecord' == cmd:
+        record_flag = False
+    elif 'record' == cmd:
+        path = os.path.join(os.getcwd(), 'media', '{}-{}'.format(device_name, uuid))
+        if not os.path.exists(path):
+            os.mkdir(path)
+            annotation = open(os.path.join( path, 'annotation.csv'), 'w', newline='')
+            annotation.close()
+        image_id = len(os.listdir(path))
+        record_flag = True
+    elif 'train':
+        train_flag = True
+    elif 'endTrain':
+    # get keypoint tflite model 
+        tflite = os.path.join(os.getcwd(), 'media', "{}-{}".format(device_name, uuid),'keypoint_classifier.tflite')
+        dataset = os.path.join(os.getcwd(), 'media', "{}-{}".format(device_name, uuid),'keypoint.csv')
+
+        if os.path.isfile(tflite):
+            keypoint_classifier = KeyPointClassifier(model_path=tflite)
+            y_dataset = np.loadtxt(dataset, delimiter=',', dtype='str', usecols=(42))
+            labelencoder = LabelEncoder()
+            y_dataset = labelencoder.fit_transform(y_dataset)
+            gesture = labelencoder.classes_
+        train_flag = False
+    else:
+        pass
+
+def save_imgae(image, device_name, uuid, hand_landmark):
+    global image_id
+    path = os.path.join(os.getcwd(), 'media')
+    path = os.path.join(path, '{}-{}'.format(device_name, uuid))
+    anno_path = os.path.join( path, 'annotation.csv')
+    image_path = os.path.join(path, '{}.png'.format(str(image_id).zfill(5)))
+    
+    with open(anno_path, 'a+', newline='') as annotation:
+        ann_writer = csv.writer(annotation)
+        if hand_landmark[0]:
+            temp_landmark_list=[]
+            temp_landmark_list.append(image_id)
+            for landmark in hand_landmark[2]['landmark']:
+                temp_landmark_list.append(landmark['x'])
+                temp_landmark_list.append(landmark['y'])
+            temp_landmark_list.append("no_label")
+            ann_writer.writerow(temp_landmark_list)
+
+        if hand_landmark[1]:
+            temp_landmark_list=[]
+            temp_landmark_list.append(image_id)
+            for landmark in hand_landmark[3]['landmark']:
+                temp_landmark_list.append(landmark['x'])
+                temp_landmark_list.append(landmark['y'])
+            temp_landmark_list.append("no_label")
+            ann_writer.writerow(temp_landmark_list)
+
+    if hand_landmark[0] or hand_landmark[1]:
+        cv2.imwrite(image_path, image)
+        image_id+=1
+
+# models = ['Hands', 'Pose', 'Face', 'Holistic']
+def StreamingHands(url, device_name, model, model_complexity, detection_confidence, uuid):
+    global right_hand_visibility, face_visibility, left_hand_visibility, record_flag, train_flag
+    global face_dict, left_hand_dict, right_hand_dict, pose_dict, hand_sign_id, keypoint_classifier, gesture
+
+    out = cv2.VideoWriter('appsrc ! videoconvert' + \
+        ' ! x264enc speed-preset=ultrafast bitrate=600' + \
+        ' ! rtspclientsink location=rtsp://localhost:8554/{}'.format(device_name),
+        cv2.CAP_GSTREAMER, 0, 30, (960, 540), True)
+    if not out.isOpened():
+        raise Exception("can't open video writer")
 
     cap = cv2.VideoCapture(url)
     if not cap.isOpened():
         raise CameraOpenError("Camera Not Open")
-    while cap.isOpened():
-        
-        success, frame = cap.read()
-        if not success:
-            print("Ignoring empty camera frame.")
-            continue
 
-        if len(images) == 2:
-            images[0] = cv2.flip(frame, 1)
-        else :
-            images.append(cv2.flip(frame, 1))
+    with mp_hands.Hands( 
+        min_detection_confidence=detection_confidence, 
+        min_tracking_confidence=0.5, 
+        model_complexity=model_complexity) as hands:
+        while cap.isOpened():
+            
+            success, frame = cap.read()
+            if not success:
+                print("Ignoring empty camera frame.")
+                continue
+            
+            hand_landmark = []
 
-        image = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB)
-                
-        image.flags.writeable = False
-        results = holistic.process(image)
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            image = cv2.flip(image, 1)
 
-        if results.face_landmarks:
-            face_dict = MessageToDict(results.face_landmarks)
-            face_visibility = True
-        else:
-            face_visibility = False
-        
-        if results.left_hand_landmarks:
-            left_hand_dict = MessageToDict(results.left_hand_landmarks)
-            left_hand_visibility = True
-        else:
+            image.flags.writeable = False
+            results = hands.process(image)
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
             left_hand_visibility = False
-
-        if results.right_hand_landmarks:
-            right_hand_dict = MessageToDict(results.right_hand_landmarks)
-            right_hand_visibility = True
-        else:
             right_hand_visibility = False
             
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    mp_drawing.draw_landmarks(
+                        image,
+                        hand_landmarks,
+                        mp_hands.HAND_CONNECTIONS,
+                        mp_drawing_styles.get_default_hand_landmarks_style(),
+                        mp_drawing_styles.get_default_hand_connections_style())
 
-        # print('right_hand_visibility out = ', right_hand_visibility)
-        if results.pose_landmarks:
-            pose_dict = MessageToDict(results.pose_landmarks)
+                for idx, handLms in enumerate(results.multi_hand_landmarks):
+                    lbl = results.multi_handedness[idx].classification[0].label
+                    if lbl == 'Left':
+                        ls = []
+                        for l in handLms.landmark:
+                            ls.append({'x':l.x, 'y':l.y, 'z':l.z})
+                        left_hand_dict['landmark'] = ls
+                        left_hand_visibility = True
+                    else:
+                        ls = []
+                        for l in handLms.landmark:
+                            ls.append({'x':l.x, 'y':l.y, 'z':l.z})
+                        right_hand_dict['landmark'] = ls
+                        right_hand_visibility = True
+            # image = cv2.flip(image, 1)
 
-        mp_drawing.draw_landmarks(
-            image,
-            results.face_landmarks,
-            mp_holistic.FACEMESH_CONTOURS,
-            landmark_drawing_spec=None,
-            connection_drawing_spec=mp_drawing_styles
-            .get_default_face_mesh_contours_style())
-        mp_drawing.draw_landmarks(
-            image,
-            results.pose_landmarks,
-            mp_holistic.POSE_CONNECTIONS,
-            landmark_drawing_spec=mp_drawing_styles
-            .get_default_pose_landmarks_style())
-        
-        if results.right_hand_landmarks:
-            mp_drawing.draw_landmarks(
-                image,
-                results.right_hand_landmarks,
-                mp_holistic.HAND_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles
-                .get_default_hand_landmarks_style())
+            if record_flag:
+                save_imgae(image, device_name, uuid, (right_hand_visibility, left_hand_visibility, right_hand_dict, left_hand_dict))
+            if not train_flag:
+                hand_sign_id = [-1, -1]
+                if results.multi_hand_world_landmarks:
+                    for idx, hand_landmarks in enumerate(results.multi_hand_world_landmarks):
+                        if results.multi_handedness[idx].classification[0].label == 'Right':
+                            lbl = 0
+                        else:
+                            lbl = 1
+                        pre_processed_landmark_list = pre_process_landmark(hand_landmarks.landmark)
+                        hand_sign_id[lbl] = int(keypoint_classifier(pre_processed_landmark_list))
 
-        if results.left_hand_landmarks:
-            mp_drawing.draw_landmarks(
-                image,
-                results.left_hand_landmarks,
-                mp_holistic.HAND_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles
-                .get_default_hand_landmarks_style())
-        # cv2.imshow('MediaPipe Holistic', image)
-        # time.sleep(0.1)
-        # if len(images) == 2:
-        #     images[1] = image
-        # else :
-        #     images.append(image)
-        if cv2.waitKey(5) & 0xFF == 27:
-            break
-    fp.close()
+            if hand_sign_id[0] != -1:
+                cv2.putText(image, f'gesture : {gesture[hand_sign_id[0]]}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, (0, 196, 255), 2)
+            # cv2.imshow('MediaPipe Hands', image)
+            image = cv2.resize(image, (960, 540), interpolation = cv2.INTER_LINEAR)
+            out.write(image)
+            if cv2.waitKey(5) & 0xFF == 27:
+                break
+    cap.release()
+
+
+def Streaming(url, device_name, model, model_complexity, detection_confidence, uuid):
+    global right_hand_visibility, face_visibility, left_hand_visibility, record_flag
+    global face_dict, left_hand_dict, right_hand_dict, pose_dict
+
+    cap = cv2.VideoCapture(url)
+    if not cap.isOpened():
+        raise CameraOpenError("Camera Not Open")
+
+    with mp_holistic.Holistic( 
+        min_detection_confidence=detection_confidence, 
+        min_tracking_confidence=0.5, 
+        model_complexity=model_complexity) as holistic:
+        while cap.isOpened():
+            
+            success, frame = cap.read()
+            if not success:
+                print("Ignoring empty camera frame.")
+                continue
+            
+            hand_landmark = []
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    
+            image.flags.writeable = False
+            results = holistic.process(image)
+            image.flags.writeable = True
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            if results.face_landmarks:
+                face_dict = MessageToDict(results.face_landmarks)
+                face_visibility = True
+            else:
+                face_visibility = False
+            
+            if results.left_hand_landmarks:
+                left_hand_dict = MessageToDict(results.left_hand_landmarks)
+                left_hand_visibility = True
+            else:
+                left_hand_visibility = False
+
+            if results.right_hand_landmarks:
+                right_hand_dict = MessageToDict(results.right_hand_landmarks)
+                right_hand_visibility = True
+            else:
+                right_hand_visibility = False
+                
+            if results.pose_landmarks:
+                pose_dict = MessageToDict(results.pose_landmarks)
+
+            if (model == 'Face' or model == 'Holistic'):
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.face_landmarks,
+                    mp_holistic.FACEMESH_CONTOURS,
+                    landmark_drawing_spec=None,
+                    connection_drawing_spec=mp_drawing_styles
+                    .get_default_face_mesh_contours_style())
+                # mp_drawing.draw_landmarks(
+                #     image=image,
+                #     landmark_list= results.face_landmarks,
+                #     connections=mp_holistic.FACEMESH_TESSELATION,
+                #     landmark_drawing_spec=None,
+                #     connection_drawing_spec=mp_drawing_styles
+                #     .get_default_face_mesh_tesselation_style())
+            if (model == 'Pose' or model == 'Holistic'):
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_holistic.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles
+                    .get_default_pose_landmarks_style())
+            
+            if results.right_hand_landmarks and (model == 'Hands' or model == 'Holistic'):
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.right_hand_landmarks,
+                    mp_holistic.HAND_CONNECTIONS,
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style())
+
+            if results.left_hand_landmarks and (model == 'Hands' or model == 'Holistic'):
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.left_hand_landmarks,
+                    mp_holistic.HAND_CONNECTIONS,
+                    mp_drawing_styles.get_default_hand_landmarks_style(),
+                    mp_drawing_styles.get_default_hand_connections_style())
+            image = cv2.flip(image, 1)
+            # cv2.imshow('MediaPipe Holistic', image)
+            if record_flag:
+                save_imgae(image, device_name, uuid, (right_hand_visibility, left_hand_visibility, right_hand_dict, left_hand_dict))
+            if cv2.waitKey(5) & 0xFF == 27:
+                break
     cap.release()
 
 def on_register(dan):
     print('register successfully')
 
+def to_vector(coordinate):
+    return np.array([coordinate['x'], coordinate['y'], coordinate['z']])
 
-# Face IDF Function
+def coordinate_to_angle(coordinate):
+    angles = []
+    for i in range(len(coordinate)-2):
+        v1 = to_vector(coordinate[i]) - to_vector(coordinate[i+1])
+        v2 = to_vector(coordinate[i+2]) - to_vector(coordinate[i+1])
+
+        Lv1=np.sqrt(v1.dot(v1))
+        Lv2=np.sqrt(v2.dot(v2))
+        cos_angle=v1.dot(v2)/(Lv1*Lv2)
+        angle_rad=np.arccos(cos_angle)
+        angle=angle_rad*360/2/np.pi
+
+        angles.append(angle)
+    
+    return angles
+# -------------------------------------------------------------------------------
+#                           Face IDF Function
+# -------------------------------------------------------------------------------
 def FLeftCheek_I():
     if face_visibility:
         return json.dumps([face_dict['landmark'][x] for x in l_cheek_idx])                
@@ -299,81 +615,163 @@ def FSilhouette_I():
         return json.dumps([face_dict['landmark'][x] for x in silhouette_idx])
     else:
         return NoData()
-
-# Hand IDF Function
+# -------------------------------------------------------------------------------
+#                           Hand Angle IDF Function
+# -------------------------------------------------------------------------------
 def HLeftIndex_I():
+    if left_hand_visibility:
+        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx]))
+    else:
+        return NoData()
+
+def HLeftIndexAngle_I():
+    if left_hand_visibility:
+        return [json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx])), '0', '0']
+    else:
+        return NoData()
+
+def HLeftMiddleAngle_I():
+    if left_hand_visibility:
+        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in middle_idx]))
+    else:
+        return NoData()
+
+def HLeftPinkyAngle_I():
+    if left_hand_visibility:
+        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in pinky_idx]))
+    else:
+        return NoData()
+
+def HLeftRingAngle_I():
+    if left_hand_visibility:
+        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in ring_idx]))
+    else:
+        return NoData()
+
+def HLeftThumbAngle_I():
+    if left_hand_visibility:
+        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])]))
+    else:
+        return NoData()
+
+def HLeftWristAngle_I():
+    if left_hand_visibility:
+        return json.dumps([0,0,0])
+    else:
+        return NoData()
+
+def HRightIndexAngle_I():
+    if right_hand_visibility:
+        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in index_idx]))
+    else:
+        return NoData()
+
+def HRightMiddleAngle_I():
+    if right_hand_visibility:
+        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in middle_idx]))
+    else:
+        return NoData()
+
+def HRightPinkyAngle_I():
+    if right_hand_visibility:
+        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in pinky_idx]))
+    else:
+        return NoData()
+
+def HRightRingAngle_I():
+    if right_hand_visibility:
+        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in ring_idx]))
+    else:
+        return NoData()
+
+def HRightThumbAngle_I():
+    if right_hand_visibility:
+        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])]))
+    else:
+        return NoData()
+
+def HRightWristAngle_I():
+    if right_hand_visibility:
+        return json.dumps([time.time()])
+    else:
+        return NoData()
+# -------------------------------------------------------------------------------
+#                           Hand Coordinate IDF Function
+# -------------------------------------------------------------------------------
+def HLeftIndexCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in index_idx])
     else:
         return NoData()
 
-def HLeftMiddle_I():
+def HLeftMiddleCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in middle_idx])
     else:
         return NoData()
 
-def HLeftPinky_I():
+def HLeftPinkyCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in pinky_idx])
     else:
         return NoData()
 
-def HLeftRing_I():
+def HLeftRingCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in ring_idx])
     else:
         return NoData()
 
-def HLeftThumb_I():
+def HLeftThumbCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in thumb_idx])
     else:
         return NoData()
 
-def HLeftWrist_I():
+def HLeftWristCoordinate_I():
     if left_hand_visibility:
         return json.dumps([left_hand_dict['landmark'][x] for x in wrist_idx])
     else:
         return NoData()
 
-def HRightIndex_I():
+def HRightIndexCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in index_idx])
     else:
         return NoData()
 
-def HRightMiddle_I():
+def HRightMiddleCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in middle_idx])
     else:
         return NoData()
 
-def HRightPinky_I():
+def HRightPinkyCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in pinky_idx])
     else:
         return NoData()
 
-def HRightRing_I():
+def HRightRingCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in ring_idx])
     else:
         return NoData()
 
-def HRightThumb_I():
+def HRightThumbCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in thumb_idx])
     else:
         return NoData()
 
-def HRightWrist_I():
+def HRightWristCoordinate_I():
     if right_hand_visibility:
         return json.dumps([right_hand_dict['landmark'][x] for x in wrist_idx])
     else:
         return NoData()
-
-# Pose IDF Function
+# -------------------------------------------------------------------------------
+#                           Pose IDF Function
+# -------------------------------------------------------------------------------
 def PHead_I():
     return json.dumps([pose_dict['landmark'][x] for x in head_idx])
 

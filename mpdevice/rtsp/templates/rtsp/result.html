@@ -4,6 +4,17 @@
     <head>
         <title>mpdevice</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        <!-- JavaScript Bundle with Popper -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+        <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script> -->
+        
+        <link rel="stylesheet" href="//apps.bdimg.com/libs/jqueryui/1.10.4/css/jquery-ui.min.css">
+        <link href="{% static 'jquery-ui/jquery-ui.css' %}" rel="stylesheet">
+        <script src="{% static 'jquery-ui/external/jquery/jquery.js' %}"></script>
+        <script src="{% static 'jquery-ui/jquery-ui.js' %}"></script>
+
+        <link href="{% static 'css/style.css' %}" rel="stylesheet" type="text/css"/>
+        <script src="{% static 'js/jquery.csv.js' %}"></script>
         <style>
             body {
                background-color: lightgray;
@@ -13,136 +24,269 @@
             }
             #ct{
                 position: relative;
-                left: 5%;
+                left: 2%;
                 top: 0%;
                 // transform: translate(-25%, 0%);
-                height: 100%; 
-                overflow: auto;
+                width: 95%;
+                height: 100%;
             }
             .c{
-                height: 100%;
-                overflow: hidden;
+                position: absolute;
+                height: auto;
+                top: 50px;
+                width: calc(100% - 280px);
+                left: 280px;
+                // background-color: green;
             }
             h1 {
-
                 color: black;
             }
             #canvas{border:1px solid black;}
+            
             #infoi {
-                width: 100%;
-                height: 100%;
-                position: fixed;
-                top: 0;
-                left: 0;
-                z-index: 10;
-              }
-            #btn{
-                margin-bottom: 50px;
+              width: 100%;
+              height: 100%;
+              position: fixed;
+              top: 0;
+              left: 0;
+              z-index: 10;
             }
 
-            select:active, select:hover {
-                outline: none
-            }
-
-            select:active, select:hover {
-                outline-color: red
-            }
         </style>
-        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-        <script type="text/javascript">
-            $(function(){
-                $("#infoi").hide(0);
-                console.log({{device_id}});
-            });
-            
-            {% if device_id > -1%}
-                window.onload=function (){
-                    var msg="mdp device id is {{device_id}}";
-                    alert(msg);
-                    window.location.replace("{% url "main_page" %}")
-                }
-            {% endif %}
-            
-            $(document).ready(function() {
-                $('#rtsp_id').on('change', function() {
-                    if($("#rtsp_id").val() == "add rtsp url"){
-                        $("#infoi").show(0);
-                    } else {
-                        document.forms['device_form'].submit();
-                    }
-                });
-              });
+        <script>
+        //$.get( '{{ MEDIA_URL }}{{ select }}/list.csv', function( CSVdata) {
+          // CSVdata is populated with the file contents
+          // ready to be converted into an Array
+          // data = $.csv.toArrays(CSVdata);
+          // console.log(data[0]);
+        //});
 
-            function close_infoi() {
-                $("#infoi").hide(0);
-            }
-        </script>
+
+      var cur_image = 0;
+       function change_image(item){
+          var l = $('ul#image_btn li').length;
+          
+          if($(item).attr('id') == 'next'){
+            $('#'+cur_image).attr('class', 'nav-link text-white');
+            cur_image=(cur_image+1)%l;
+            $('#'+cur_image).attr('class', 'nav-link active');
+          } else if ($(item).attr('id') == 'prev'){
+            $('#'+cur_image).attr('class', 'nav-link text-white');
+            cur_image=(cur_image-1 == -1)? l-1 : cur_image-1;
+            $('#'+cur_image).attr('class', 'nav-link active');
+          } else {
+            $('#'+cur_image).attr('class', 'nav-link text-white');
+            $(item).attr('class', 'nav-link active');
+            cur_image = parseInt($(item).attr('id'));
+          }
+       }
+    </script>
     </head>
     <body>
-        <div id="infoi">
-            <div class="modal-dialog" role="document">
-                <div class="modal-content rounded-5 shadow">
-                    <div class="modal-header p-5 pb-4 border-bottom-0">
-                        <h2 class="fw-bold mb-0">Add new RTSP</h2>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="close_infoi()"></button>
+      <!-- ui-dialog -->
+      <div id="dialog" title="Label">
+        <!-- <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit</p> -->
+        <input id="label" list="hosting-plan" type="text">
+          <datalist id="hosting-plan">
+            {% for label in label_set %}
+              <option value="{{label}}"/>
+            {% endfor %}
+          </datalist>
+      </div>
+        <div class="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark" style="width: 280px; height: 780px; position: relative">
+            <div>
+              <div class="p-2 bg-dark" style="width:45%; text-align:center; display:inline-block">
+                  <a href="{% url "main_page" %}" class="text-white" style="text-decoration:none;">
+                      Device
+                  </a>
+              </div>
+              <div class="p-2 bg-primary" style="width:45%; text-align:center; display:inline-block">
+                  <a href="{% url "annotation" %}" class="text-white" style="text-decoration:none;">
+                      Label
+                  </a>
+              </div>
+          </div>
+            <hr>
+            <ul class="nav nav-pills flex-column mb-auto">
+            <!-- <a href="#" class="nav-link active" aria-current="page"> 
+                <li class="nav-item">
+            -->
+            {% for name, full_name in folder_name %}
+              <li>
+                {% if select == full_name %}
+                    <a href="{% url "annotation" full_name %}" class="nav-link active" aria-current="page">
+                {% else %}
+                    <a href="{% url "annotation" full_name %}" class="nav-link text-white">
+                {% endif %}
+                  <svg class="bi me-2" width="16" height="16"><use xlink:href="#{{full_name}}"></use></svg>
+                  {{name}}
+                </a>
+              </li>
+            {% endfor %}
+            </ul>
+            <hr>
+        </div>
+        {% if select %}
+        <div class="c">
+            <div id="ct">
+                <div id="carouselExampleCaptions" class="carousel slide" data-bs-ride="carousel" data-bs-interval="false" style="width: 80%; height: auto; margin-right:0px; display: inline-block;">
+                    <div class="carousel-inner">
+                      {% for i, bb in image %}
+                        <div class="carousel-item {% if forloop.counter == image_id %} active {% endif %} ">
+                          <img src="{{ MEDIA_URL }}{{ select }}/{{ i }}" class="d-block w-100" alt="...">
+                            {% for x_min, y_min, width, height, id, gesture_label in bb %}
+                              <div  label-id={{id}}
+                                    style="position:absolute; 
+                                          z-index:2; 
+                                          left: calc({{x_min}}% * 100); 
+                                          top :   calc({{y_min}}% * 100); 
+                                          width:  calc({{width}}% * 100); 
+                                          height: calc({{height}}%* 100); 
+                                          border-style:solid; 
+                                          border-color:
+                                          {% if gesture_label == 'no_label' %}
+                                            blue
+                                          {% else %}
+                                            red
+                                          {% endif%}  
+                                          ;"
+                                    onclick="label(this)">
+                                  {% if gesture_label != 'no_label' %}
+                                    <span style="background-color:red; color: white; font-size:10px; margin:0px; position:absolute; top:-15px; left:-2px">{{gesture_label}}</span>
+                                  {% endif %}
+                                  </div>
+                            {% endfor %}
+                        </div>
+                      {% endfor %}
+                          <!--
+                            <div class="carousel-caption d-none d-md-block">
+                            <h5>First slide label</h5>
+                            <p>Some representative placeholder content for the first slide.</p>
+                            </div>
+                          -->
+                    <!-- background gradient  style="background: -webkit-linear-gradient(left,rgb(0, 0, 0, 1),rgb(0, 0, 0, 0));" -->
+                    <button class="carousel-control-prev" type="button" data-bs-target="#carouselExampleCaptions" data-bs-slide="prev" id="prev" onclick="change_image(this)">
+                      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                      <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#carouselExampleCaptions" data-bs-slide="next" id="next" onclick="change_image(this)">
+                      <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                      <span class="visually-hidden">Next</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style="width: 220px; height: 537px; display: inline-block; overflow-y: auto;">
+                    <div class="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark" style="width: 200px; height: auto; position: relative">
+                      <ul id="image_btn" class="nav nav-pills flex-column mb-auto">
+                        {% for i, bb in image %} 
+                        <li>
+                              <button type="button"
+                                      onclick="change_image(this)"
+                                      style="width: 170px;"
+                                      data-bs-target="#carouselExampleCaptions" 
+                                      data-bs-slide-to="{{ forloop.counter|add:"-1" }}" id="{{ forloop.counter|add:"-1" }}" 
+                                      class="nav-link {% if forloop.counter == 1 %}active {% else %} text-white 
+                                      {% endif %}">
+                              {{ forloop.counter }}
+                              </button>
+                        </li>
+                        {% endfor %}
+                      </ul>
+                      <hr>
                     </div>
 
-                    <div class="modal-body p-5 pt-0">
-                        <form class="" method="POST" action="{% url "main_page" %}">
-                            {% csrf_token %}
-                            <div class="form-floating mb-3">
-                                <input name="new_rtsp_name" type="text" class="form-control rounded-4" id="floatingInput" placeholder="RTSP name">
-                                <label for="floatingInput">RTSP name</label>
-                            </div>
-                            <div class="form-floating mb-3">
-                                <input name="new_rtsp_url" type="text" class="form-control rounded-4" id="floatingPassword" placeholder="RTSP url">
-                                <label for="floatingInput">RTSP streaming</label>
-                            </div>
-                            <button name="btnAddNew" class="w-100 mb-2 btn btn-lg rounded-4 btn-primary" type="submit">Save</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+                  </div>
+                  <div id="botton_container" style="">
+                      <input type="button" name="btnSave" id="btn" value="Save" data-url="{% url "annotation"  %}" onclick="save_label(this)">
+                      <input type="button" name="btnDownload" id="btn" value="Download" onclick="save_label(this)">
+                      <input type="button" name="btnTrain" id="btn" value="Train" onclick="save_label(this)">
+                  </div>
+              </div>
         </div>
-        <!-- <div class="container">
-            <header class="d-flex justify-content-center py-3">
-              <ul class="nav nav-pills">
-                <li class="nav-item"><a href="#" class="nav-link active" aria-current="page">Home</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Features</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">Pricing</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">FAQs</a></li>
-                <li class="nav-item"><a href="#" class="nav-link">About</a></li>
-              </ul>
-            </header>
-        </div> -->
-        <div class="c">
-            <div id="ct" >
-                <h1 style="font-weight:bold;">Extra Setup</h1>
-                <form name="device_form" action="" method="POST">
-                    {% csrf_token %}
-                    <div style="display:inline;">
-                        <div style="float:left;  width: 50px;"><label class="">rtsp : </label></div>
-                        <div style="float:left">
-                            <select id="rtsp_id" name="rtsp_name">
-                                    <option value='{{ cam_source_value }}'>{{ cam_source }}</option>
-                                {% for i in rtsp %}
-                                    <option value='{{i.name}}'>{{ i.name }}</option>
-                                {% endfor %}
-                                    <option value='add rtsp url'>add rtsp url</option>
-                            </select>
-                        </div>
-                    </div>
-                    <br>
-                    <br>
-                    <img src="{{ frame_url }}">
-                    <br>
-                    <br>
-                    <input type="submit" name="btnSave" id="btn" value="Save">
-                    <a href="{% url "clear_setup" %}">
-                    <input type="button" name="btnClear" id="btn" value="Clear">
-                    </a>
-                </form>
-            </div>
-        </div>
+        {% endif %}
+        <script>
+          var label_list = ['close', 'point', 'open'];
+          var labeled = {};
+
+          $( "#dialog" ).dialog({
+            autoOpen: false,
+            width: 300,
+            buttons: [
+              {
+                text: "Ok",
+                click: function() {
+                  $(this).dialog( "close" );
+                  var bb = $(this).data("callback");
+                  var bb_id = $(bb).attr('label-id');
+                  var ipt =  $('#label').val();
+
+                  $('#label').val("");
+                  console.log($('#label').val());
+                  if(ipt != null && ipt.length != 0){
+                    $(bb).css('border-color', 'red');
+                    $(bb).html('<span style="background-color:red; color: white; font-size:10px; margin:0px; position:absolute; top:-15px; left:-2px">  '+ipt+'  </span>');
+                    
+                    labeled[bb_id] = ipt;
+                    // add new label to label_list
+                    if( !label_list.includes(ipt)){
+                      label_list.push(ipt);
+                      var str='';
+                      for (var i=0; i < label_list.length; ++i){
+                        str += '<option value="'+label_list[i]+'" />'; 
+                      }
+                      var my_list=document.getElementById("hosting-plan");
+                      my_list.innerHTML = str;
+                    }
+                    console.log(labeled);
+                  } else {
+                    labeled[bb_id] = 'no_label';
+                    $(bb).css('border-color', 'blue');
+                    $(bb).html('');
+                  }
+                }
+              },
+              {
+                text: "Cancel",
+                click: function() {
+                  $( this ).dialog( "close" );
+                }
+              }
+            ]
+          });
+
+          function label(item){
+              $( "#dialog" ).data("callback", item).dialog( "open" );
+              event.preventDefault();
+          }
+
+          function save_label(item){
+                $.ajax({
+                  type: "GET",
+                  url: $(item).attr('data-url'),
+                  data: labeled,
+                  success: function(data){
+                      console.log("success");
+                  },
+                  failure: function(data){
+                      console.log("failure");
+                  },
+              });
+              var v = $(item).val();
+              if(v == 'Download'){
+                const link = document.createElement("a");
+                link.href = "{{ MEDIA_URL }}{{ select }}/keypoint.csv";
+                link.download = "keypoint.csv";
+                link.click();
+              } else if(v == 'Train'){
+                const link = document.createElement("a");
+                link.href = "{% url "train_page"  select %}";
+                link.click();
+              } else {
+                // nothing to do
+              }
+          }
+        </script>
+
     </body>
 </html>

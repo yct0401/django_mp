@@ -1,7 +1,6 @@
-
-import atexit
 import logging
 import os.path
+import os
 import signal
 import re
 import sys
@@ -9,16 +8,15 @@ import time
 import traceback
 from typing import Counter
 import mpsa
+from queue import Queue
 
-from threading import Thread, Event, active_count
+from threading import Thread
 from uuid import UUID
 
 from iottalkpy import dan
 from iottalkpy.color import DAIColor
 from iottalkpy.dan import DeviceFeature, NoData
 from iottalkpy.exceptions import RegistrationError
-
-
 
 log = logging.getLogger(DAIColor.wrap(DAIColor.logger, 'DAI'))
 log.setLevel(level=logging.INFO)
@@ -132,8 +130,42 @@ class DAI():
 
 
 # main program
-print(sys.argv)
-t = Thread(target = mpsa.Streaming, args=(sys.argv[1], sys.argv[2]))
+
+# argv parameter
+# 0 : mpdai.py
+# 1 : rtsp url 
+# 2 : device_name
+# 3 : Name of mediapipe model  
+# 4 : model complexity 
+# 5 : detection confidence
+# 6 : device uuid 
+
+stdin_queue = Queue(maxsize=1)
+rtsp_url = sys.argv[1]
+device_name = sys.argv[2]
+model = sys.argv[3]
+complexity = int(sys.argv[4])
+confidence = float(sys.argv[5])/100
+uuid = sys.argv[6]
+
+def StdinComsumer(q):
+    """ stdin comsumer thread
+    read stdin and put into queue for main program
+    """
+    while True:
+        line = sys.stdin.readline()
+        q.put(line)
+
+std_t = Thread( target=StdinComsumer, args=(stdin_queue,))
+
+if model=='Hands':
+    t = Thread(target = mpsa.StreamingHands, args=(rtsp_url, device_name, model, complexity, confidence, uuid))
+else:
+    t = Thread(target = mpsa.Streaming, args=(rtsp_url, device_name, model, complexity, confidence, uuid))
+
+std_t.setDaemon(True)
+std_t.start()
+
 t.setDaemon(True)
 t.start()
 
@@ -169,6 +201,7 @@ for df in dai.device_features.values():
     else:
         odf_list.append(df.profile())
 
+# register to IoTtalk
 client = dan.Client()
 
 # client.register(
@@ -193,16 +226,30 @@ client = dan.Client()
 #     on_disconnect=dai.on_disconnect
 # )
 
+# handle signal from MPtalk
 def signal_handler(signal, frame):
     client.deregister()
-    print(signal)
+    print("signal : {}".format(signal))
+    sys.exit(0)
+    
+    
+
 if hasattr(os.sys, 'winver'):
     signal.signal(signal.SIGBREAK, signal_handler)
 else:
     signal.signal(signal.SIGTERM, signal_handler)
 
+# push data & handle save image 
 try:
     while True:
+        if not stdin_queue.empty():
+            cmd = stdin_queue.get()
+            cmd = re.sub(r"[^a-zA-Z0-9]","",cmd)
+            if cmd == 'deregister':
+                client.deregister()
+                sys.exit(0)
+            mpsa.set_record(cmd, device_name, uuid)
+            stdin_queue.task_done()
         for df_name in mpsa.idf_list:
             if not dai.flags.get(df_name) or dai.flags[df_name] == False:
                 continue
@@ -210,11 +257,10 @@ try:
                 continue
             _data = dai.device_features[df_name].push_data()
             if not isinstance(_data, NoData) and _data is not NoData:
-                # print('push : ', _data)
+                # print("{} : {}".format(df_name, _data))
                 client.push(df_name, _data)
-        time.sleep(1)
+        time.sleep(0.1)
 except KeyboardInterrupt:
-    print("key interrupt")
-finally:
     client.deregister()
+    print("key interrupt")
 
