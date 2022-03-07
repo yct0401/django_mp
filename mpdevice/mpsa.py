@@ -5,7 +5,6 @@ from turtle import left
 
 import cv2
 import mediapipe as mp
-import transformations as tf
 
 from iottalkpy.dan import NoData
 from google.protobuf.json_format import MessageToDict
@@ -342,12 +341,14 @@ def StreamingHands(url, device_name, model, model_complexity, detection_confiden
     global right_hand_visibility, face_visibility, left_hand_visibility, record_flag, train_flag
     global face_dict, left_hand_dict, right_hand_dict, pose_dict, hand_sign_id, keypoint_classifier, gesture
 
-    out = cv2.VideoWriter('appsrc ! videoconvert' + \
-        ' ! x264enc speed-preset=ultrafast bitrate=600' + \
-        ' ! rtspclientsink location=rtsp://localhost:8554/{}'.format(device_name),
-        cv2.CAP_GSTREAMER, 0, 30, (960, 540), True)
-    if not out.isOpened():
-        raise Exception("can't open video writer")
+    # Device Frame to Rtsp function, will update...
+    # -------------------------------------------------------
+    # out = cv2.VideoWriter('appsrc ! videoconvert' + \
+    #     ' ! x264enc speed-preset=ultrafast bitrate=600' + \
+    #     ' ! rtspclientsink location=rtsp://localhost:8554/{}'.format(device_name),
+    #     cv2.CAP_GSTREAMER, 0, 30, (960, 540), True)
+    # if not out.isOpened():
+    #     raise Exception("can't open video writer")
 
     cap = cv2.VideoCapture(url)
     if not cap.isOpened():
@@ -419,7 +420,11 @@ def StreamingHands(url, device_name, model, model_complexity, detection_confiden
                 cv2.putText(image, f'gesture : {gesture[hand_sign_id[0]]}', (20, 70), cv2.FONT_HERSHEY_PLAIN, 3, (0, 196, 255), 2)
             # cv2.imshow('MediaPipe Hands', image)
             image = cv2.resize(image, (960, 540), interpolation = cv2.INTER_LINEAR)
-            out.write(image)
+            
+            # Device Frame to Rtsp function, will update...
+            # ---------------------------------------------
+            #out.write(image)
+            
             if cv2.waitKey(5) & 0xFF == 27:
                 break
     cap.release()

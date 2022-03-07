@@ -744,20 +744,22 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
-def gen_device(device_name):
-    device_output = cv2.VideoCapture('rtsp://localhost:8554/{}'.format(device_name))
-    while True:
-        success, image = device_output.read()
-        if not success:
-            image = np.array([[[0]*640]*480]*3)
-            ret, jpeg = cv2.imencode('.png', image)
-            return jpeg
-        height = int(960 / image.shape[1] * image.shape[0])
-        image = cv2.resize(image, (960, height), interpolation = cv2.INTER_LINEAR)
-        ret, png = cv2.imencode('.png', image)
+# to show Device Rtsp function, will update...
+# -------------------------------------------------------
+# def gen_device(device_name):
+#     device_output = cv2.VideoCapture('rtsp://localhost:8554/{}'.format(device_name))
+#     while True:
+#         success, image = device_output.read()
+#         if not success:
+#             image = np.array([[[0]*640]*480]*3)
+#             ret, jpeg = cv2.imencode('.png', image)
+#             return jpeg
+#         height = int(960 / image.shape[1] * image.shape[0])
+#         image = cv2.resize(image, (960, height), interpolation = cv2.INTER_LINEAR)
+#         ret, png = cv2.imencode('.png', image)
         
-        yield (b'--frame\r\n'
-                b'Content-Type: image/jpeg\r\n\r\n' + png.tobytes() + b'\r\n\r\n')
+#         yield (b'--frame\r\n'
+#                 b'Content-Type: image/jpeg\r\n\r\n' + png.tobytes() + b'\r\n\r\n')
 
 # def device_url(request, device_name):
 #     d = device.objects.filter(name= device_name)[0]    
@@ -776,8 +778,6 @@ def device_url(request, device_name, model, complexity=0, confidence=50):
 
 def livecam_feed(request, cam_name, model, complexity, confidence):
     confidence = float(confidence/100)
-
-    # print(cam_name, model, complexity, confidence)
 
     global CAM
     if not CAM.get(cam_name) or not CAM[cam_name].active or model not in models:

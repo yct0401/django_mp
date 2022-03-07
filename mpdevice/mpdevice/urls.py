@@ -28,7 +28,11 @@ urlpatterns = [
     path('data/', views.annotation, name='annotation'),
     path('data/<str:device_name>/', views.annotation, name='annotation'),
     path('device/<str:device_name>/', views.main_page, name='main_page'),
-    path('device_stream/<str:device_name>', views.device_url, name='device_stream'),
+    # --------------------------------------------------
+    # to show Device Rtsp function, will update...
+    # --------------------------------------------------
+    # path('device_stream/<str:device_name>', views.device_url, name='device_stream'),
+    path('device_stream/<str:device_name>/<str:model>/<int:complexity>/<int:confidence>', views.device_url, name='device_stream'),
     path('close_device/', views.close_device, name='close_device'),
     path('add_new_rtsp/', views.add_new_rtsp, name='add_new_rtsp'),
     path('clear_setup/', views.clear_setup, name='clear_setup'),

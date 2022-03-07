@@ -204,27 +204,27 @@ for df in dai.device_features.values():
 # register to IoTtalk
 client = dan.Client()
 
-# client.register(
-#     url=dai.api_url,
-#     on_signal=dai.on_signal,
-#     on_data=dai.on_data,
-#     accept_protos=['mqtt'],
-#     id_=dai.device_addr,
-#     idf_list=idf_list,
-#     odf_list=odf_list,
-#     name=dai.device_name,
-#     profile={
-#         'model': dai.device_model,
-#         'u_name': dai.username,
-#         'extra_setup_webpage': dai.extra_setup_webpage,
-#         'device_webpage': dai.device_webpage,
-#     },
-#     register_callback=dai.register_callback,
-#     on_register=dai.on_register,
-#     on_deregister=dai.on_deregister,
-#     on_connect=dai.on_connect,
-#     on_disconnect=dai.on_disconnect
-# )
+client.register(
+    url=dai.api_url,
+    on_signal=dai.on_signal,
+    on_data=dai.on_data,
+    accept_protos=['mqtt'],
+    id_=dai.device_addr,
+    idf_list=idf_list,
+    odf_list=odf_list,
+    name=dai.device_name,
+    profile={
+        'model': dai.device_model,
+        'u_name': dai.username,
+        'extra_setup_webpage': dai.extra_setup_webpage,
+        'device_webpage': dai.device_webpage,
+    },
+    register_callback=dai.register_callback,
+    on_register=dai.on_register,
+    on_deregister=dai.on_deregister,
+    on_connect=dai.on_connect,
+    on_disconnect=dai.on_disconnect
+)
 
 # handle signal from MPtalk
 def signal_handler(signal, frame):

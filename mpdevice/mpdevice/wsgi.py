@@ -10,9 +10,9 @@ https://docs.djangoproject.com/en/3.2/howto/deployment/wsgi/
 import os
 
 from django.core.wsgi import get_wsgi_application
-import sys
 
-sys.path.append('D:\Desktop\Dummy_Device_for_fingertalk\mediapipedevice\mpdevice')
+# import sys
+# sys.path.append('D:\Desktop\Dummy_Device_for_fingertalk\mediapipedevice\mpdevice')
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mpdevice.settings')
 
