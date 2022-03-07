@@ -759,9 +759,19 @@ def gen_device(device_name):
         yield (b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' + png.tobytes() + b'\r\n\r\n')
 
-def device_url(request, device_name):
-    d = device.objects.filter(name= device_name)[0]    
-    return StreamingHttpResponse(gen_device("{}".format(device_name)),
+# def device_url(request, device_name):
+#     d = device.objects.filter(name= device_name)[0]    
+#     return StreamingHttpResponse(gen_device("{}".format(device_name)),
+#                 content_type='multipart/x-mixed-replace; boundary=frame')
+
+def device_url(request, device_name, model, complexity=0, confidence=50):
+    d = device.objects.filter(name= device_name)[0]
+    confidence = float(confidence/100)
+    
+    if model not in models:
+        return no_livecam()
+    
+    return StreamingHttpResponse(gen(LiveWebCam(d.rtsp.url), model, complexity, confidence, "{}-{}".format(device_name, d.uuid)),
                 content_type='multipart/x-mixed-replace; boundary=frame')
 
 def livecam_feed(request, cam_name, model, complexity, confidence):
