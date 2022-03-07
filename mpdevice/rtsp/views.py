@@ -494,10 +494,11 @@ def annotation(request, device_name=None):
     data_folder = os.listdir(path)
     data_path = os.path.join(path, data_folder[0])
     for f in data_folder:
-        dn = f.split('-')[0]
-        context['folder_name'].append([dn, f])
-        if f == device_name:
-            data_path = os.path.join(path, f)
+        dn = f.split('-')
+        if len(dn)==2:
+            context['folder_name'].append([dn[0], f])
+            if f == device_name:
+                data_path = os.path.join(path, f)
 
     if device_name != None:
         images = os.listdir(data_path)
