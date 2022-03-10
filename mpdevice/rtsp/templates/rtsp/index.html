@@ -155,8 +155,7 @@
                 </script>
             </div>
             <div class ="device_img">
-                <!-- device rtsp, will update... -->
-                <img src="{% url "device_stream" select model complexity confidence %}">
+                    <img src="{% url "device_stream" select model complexity confidence %}">
             </div>
             <div class ="device_close">
                 <form name="device_close" action="{% url "close_device" %}" method="POST">

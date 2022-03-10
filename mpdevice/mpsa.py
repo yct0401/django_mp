@@ -5,6 +5,7 @@ from turtle import left
 
 import cv2
 import mediapipe as mp
+# import transformations as tf
 
 from iottalkpy.dan import NoData
 from google.protobuf.json_format import MessageToDict
@@ -13,6 +14,7 @@ import os, time, csv, re
 import numpy as np
 from queue import Queue
 import math as m
+import threading
 
 import itertools
 import tensorflow as tf
@@ -186,6 +188,31 @@ class KeyPointClassifier(object):
             result_index = -1
         return result_index
 
+# bufferless VideoCapture
+class VideoCapture:
+    def __init__(self, name):
+        self.cap = cv2.VideoCapture(name)
+        self.t = threading.Thread(target=self._reader)
+        self.t.daemon = True
+        self.t.start()
+
+    # grab frames as soon as they are available
+    def _reader(self):
+        while True:
+            ret = self.cap.grab()
+            if not ret:
+                break
+    # retrieve latest frame
+    def read(self):
+        ret, frame = self.cap.retrieve()
+        return ret, frame
+
+    def isOpened(self):
+        return self.cap.isOpened()
+
+    def release(self):
+        self.cap.release()
+
 def calc_landmark_list(image, landmarks):
     image_width, image_height = image.shape[1], image.shape[0]
 
@@ -275,6 +302,7 @@ def LMtoRotation(landmarks_mediapipe):
     roll = singleLMtoDegreeUsingLawOfCosines(roll_pa, roll_pb, roll_pc)
 
     return [pitch, yaw, roll]
+
 def set_record(cmd, device_name, uuid):
     global record_flag, image_id, train_flag, keypoint_classifier, gesture
     print(cmd)
@@ -350,7 +378,7 @@ def StreamingHands(url, device_name, model, model_complexity, detection_confiden
     # if not out.isOpened():
     #     raise Exception("can't open video writer")
 
-    cap = cv2.VideoCapture(url)
+    cap = VideoCapture(url)
     if not cap.isOpened():
         raise CameraOpenError("Camera Not Open")
 
@@ -362,7 +390,7 @@ def StreamingHands(url, device_name, model, model_complexity, detection_confiden
             
             success, frame = cap.read()
             if not success:
-                print("Ignoring empty camera frame.")
+                # print("Ignoring empty camera frame.")
                 continue
             
             hand_landmark = []
@@ -425,6 +453,7 @@ def StreamingHands(url, device_name, model, model_complexity, detection_confiden
             # ---------------------------------------------
             #out.write(image)
             
+            # out.write(image)
             if cv2.waitKey(5) & 0xFF == 27:
                 break
     cap.release()
@@ -434,7 +463,7 @@ def Streaming(url, device_name, model, model_complexity, detection_confidence, u
     global right_hand_visibility, face_visibility, left_hand_visibility, record_flag
     global face_dict, left_hand_dict, right_hand_dict, pose_dict
 
-    cap = cv2.VideoCapture(url)
+    cap = VideoCapture(url)
     if not cap.isOpened():
         raise CameraOpenError("Camera Not Open")
 
@@ -446,7 +475,7 @@ def Streaming(url, device_name, model, model_complexity, detection_confidence, u
             
             success, frame = cap.read()
             if not success:
-                print("Ignoring empty camera frame.")
+                # print("Ignoring empty camera frame.")
                 continue
             
             hand_landmark = []
@@ -625,79 +654,79 @@ def FSilhouette_I():
 # -------------------------------------------------------------------------------
 def HLeftIndex_I():
     if left_hand_visibility:
-        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx]))
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx])
     else:
         return NoData()
 
 def HLeftIndexAngle_I():
     if left_hand_visibility:
-        return [json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx])), '0', '0']
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in index_idx])
     else:
         return NoData()
 
 def HLeftMiddleAngle_I():
     if left_hand_visibility:
-        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in middle_idx]))
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in middle_idx])
     else:
         return NoData()
 
 def HLeftPinkyAngle_I():
     if left_hand_visibility:
-        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in pinky_idx]))
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in pinky_idx])
     else:
         return NoData()
 
 def HLeftRingAngle_I():
     if left_hand_visibility:
-        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in ring_idx]))
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in ring_idx])
     else:
         return NoData()
 
 def HLeftThumbAngle_I():
     if left_hand_visibility:
-        return json.dumps(coordinate_to_angle([left_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])]))
+        return coordinate_to_angle([left_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])])
     else:
         return NoData()
 
 def HLeftWristAngle_I():
     if left_hand_visibility:
-        return json.dumps([0,0,0])
+        return LMtoRotation(left_hand_dict['landmark'])
     else:
         return NoData()
 
 def HRightIndexAngle_I():
     if right_hand_visibility:
-        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in index_idx]))
+        return coordinate_to_angle([right_hand_dict['landmark'][x] for x in index_idx])
     else:
         return NoData()
 
 def HRightMiddleAngle_I():
     if right_hand_visibility:
-        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in middle_idx]))
+        return coordinate_to_angle([right_hand_dict['landmark'][x] for x in middle_idx])
     else:
         return NoData()
 
 def HRightPinkyAngle_I():
     if right_hand_visibility:
-        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in pinky_idx]))
+        return coordinate_to_angle([right_hand_dict['landmark'][x] for x in pinky_idx])
     else:
         return NoData()
 
 def HRightRingAngle_I():
     if right_hand_visibility:
-        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in ring_idx]))
+        return coordinate_to_angle([right_hand_dict['landmark'][x] for x in ring_idx])
     else:
         return NoData()
 
 def HRightThumbAngle_I():
     if right_hand_visibility:
-        return json.dumps(coordinate_to_angle([right_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])]))
+        return coordinate_to_angle([right_hand_dict['landmark'][x] for x in ([0,1] + thumb_idx[-3:])])
     else:
         return NoData()
 
 def HRightWristAngle_I():
     if right_hand_visibility:
-        return json.dumps([time.time()])
+        return LMtoRotation(right_hand_dict['landmark'])
     else:
         return NoData()
 # -------------------------------------------------------------------------------
