@@ -79,6 +79,33 @@ class KeyPointClassifier(object):
             result_index = -1
         return result_index
 
+# bufferless VideoCapture
+class VideoCapture:
+    def __init__(self, name):
+        self.cap = cv2.VideoCapture(name)
+        print(name)
+        print(self.isOpened())
+        self.t = Thread(target=self._reader)
+        self.t.daemon = True
+        self.t.start()
+
+    # grab frames as soon as they are available
+    def _reader(self):
+        while True:
+            ret = self.cap.grab()
+            if not ret:
+                break
+    # retrieve latest frame
+    def read(self):
+        ret, frame = self.cap.retrieve()
+        return ret, frame
+
+    def isOpened(self):
+        return self.cap.isOpened()
+
+    def release(self):
+        self.cap.release()
+
 def pre_process_landmark(landmark_list):
     temp_landmark_list = []
 
@@ -117,7 +144,7 @@ class MPdevice(object):
 class LiveWebCam(object):
     def __init__(self, url):
         self.url = url
-        self.cam = cv2.VideoCapture(url)
+        self.cam = VideoCapture(url)
         self.active = self.cam.isOpened()
     
     def __del__(self):
@@ -125,16 +152,14 @@ class LiveWebCam(object):
             self.cam.release()
 
     def set_cam(self, url):
-        self.cam = cv2.VideoCapture(url)
+        self.cam = VideoCapture(url)
         self.url = url
         self.active = self.cam.isOpened()
 
     def get_frame(self, model, models_function, keypoint_classifier=None, gesture=None):
         success, imgNp = self.cam.read()
         if not success:
-            image = np.array([[[0]*640]*480]*3)
-            ret, jpeg = cv2.imencode('.png', image)
-            return jpeg
+            return None
 
         if model=='Hands':
             image = cv2.cvtColor(cv2.flip(imgNp, 1), cv2.COLOR_BGR2RGB)
@@ -240,13 +265,12 @@ class LiveWebCam(object):
         ret, jpeg = cv2.imencode('.png', image)
         return jpeg.tobytes()
 
-CAM = {}
 id_pool = [0]
 p = {}
 
 device.objects.all().delete()
-for rtsp in  RTSP.objects.all():
-    CAM[rtsp.name] = LiveWebCam(rtsp.url)
+# for rtsp in  RTSP.objects.all():
+#     CAM[rtsp.name] = LiveWebCam(rtsp.url)
 
 
 # --------------------------------------------
@@ -542,14 +566,11 @@ def annotation(request, device_name=None):
 #               add new rtsp
 # --------------------------------------------
 def add_new_rtsp(request, sample_dir=None):
-    global CAM
     if request.method == "POST" :
         if 'btnAddNew' in request.POST:
             new_rtsp_name = request.POST.get('new_rtsp_name')
             new_rtsp_name_url = request.POST.get('new_rtsp_url')
             RTSP.objects.create(name=new_rtsp_name, location='defualt' ,url=new_rtsp_name_url)
-            
-            CAM[new_rtsp_name] = LiveWebCam(new_rtsp_name_url)
     return redirect('/extra_setup/')
 
 def clear_setup(request):
@@ -626,7 +647,7 @@ def extra_setup(request, sample_dir=None):
             complexity = int(request.POST.get('complexity'))
             confidence = int(request.POST.get('confidence'))
 
-            if CAM.get(rtsp_name):
+            if len(RTSP.objects.filter(name = rtsp_name)) == 1:
                 
                 device_id = id_pool.pop()
                 if len(id_pool) == 0:
@@ -646,14 +667,15 @@ def extra_setup(request, sample_dir=None):
                                         rtsp=device_rtsp, 
                                         uuid=device_uuid)
                 
-                # python mpdai.py rtsp://root:pcs54784@192.168.0.33:554/live.sdp 0.mp_device hand 0 50 aaaa
+                # python mpdai.py rtsp://35.203.56.127:8554/mp 0.mp_device hand 0 50 aaaa
+                print("subprocess")
                 dai_path = os.path.join(settings.BASE_DIR, 'mpdai.py')
                 p[device_name] = MPdevice()
                 (p[device_name].pipe_r, p[device_name].pipe_w) = os.pipe()
                 p[device_name].uuid = device_uuid
                 p[device_name].process= subprocess.Popen(  [   'python',
                                                         dai_path,
-                                                        CAM[rtsp_name].url, 
+                                                        device_rtsp.url, 
                                                         device_name, 
                                                         model, 
                                                         str(complexity), 
@@ -714,6 +736,8 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
             min_tracking_confidence=0.5) as hands:
             while True:
                 frame = camera.get_frame(model, hands, keypoint_classifier, gesture)
+                if not frame:
+                    continue
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
     elif model == 'Pose':
@@ -723,6 +747,8 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
             min_tracking_confidence=0.5) as pose:
             while True:
                 frame = camera.get_frame(model, pose)
+                if not frame:
+                    continue
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
     elif model == 'Face':
@@ -733,6 +759,8 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
             min_tracking_confidence=0.5) as face:
             while True:
                 frame = camera.get_frame(model, face)
+                if not frame:
+                    continue
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
     elif model == 'Holistic':
@@ -742,6 +770,8 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
             min_tracking_confidence=0.5) as holistic:
             while True:
                 frame = camera.get_frame(model, holistic)
+                if not frame:
+                    continue
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
@@ -758,9 +788,20 @@ def gen(camera, model='Hands', complexity=0, confidence=0.5, device_name=''):
 #         height = int(960 / image.shape[1] * image.shape[0])
 #         image = cv2.resize(image, (960, height), interpolation = cv2.INTER_LINEAR)
 #         ret, png = cv2.imencode('.png', image)
+def gen_device(device_name):
+    device_output = VideoCapture('rtsp://localhost:8554/{}'.format(device_name))
+    while True:
+        success, image = device_output.read()
+        if not success:
+            image = np.array([[[0]*640]*480]*3)
+            ret, jpeg = cv2.imencode('.png', image)
+            return jpeg
+        height = int(960 / image.shape[1] * image.shape[0])
+        image = cv2.resize(image, (960, height), interpolation = cv2.INTER_LINEAR)
+        ret, png = cv2.imencode('.png', image)
         
-#         yield (b'--frame\r\n'
-#                 b'Content-Type: image/jpeg\r\n\r\n' + png.tobytes() + b'\r\n\r\n')
+        yield (b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + png.tobytes() + b'\r\n\r\n')
 
 # def device_url(request, device_name):
 #     d = device.objects.filter(name= device_name)[0]    
@@ -779,11 +820,11 @@ def device_url(request, device_name, model, complexity=0, confidence=50):
 
 def livecam_feed(request, cam_name, model, complexity, confidence):
     confidence = float(confidence/100)
+    cam = RTSP.objects.filter(name = cam_name)
 
-    global CAM
-    if not CAM.get(cam_name) or not CAM[cam_name].active or model not in models:
+    if len(cam) == 0 or model not in models:
         return no_livecam()
     else:
-        return StreamingHttpResponse(gen(LiveWebCam(CAM[cam_name].url), model, complexity, confidence),
+        return StreamingHttpResponse(gen(LiveWebCam(cam[0].url), model, complexity, confidence),
                     content_type='multipart/x-mixed-replace; boundary=frame')
 
