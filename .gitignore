@@ -1,0 +1,5 @@
+mpdevice/__pycache__/*
+mpdevice/*.sqlite3
+mpdevice/rtsp/migrations/*
+mpdevice/rtsp/__pycache__/*
+mpdevice/mpdevice/__pycache__/*
